@@ -82,6 +82,8 @@ FECRU_MODULES=(
   "jetty-util-ajax"
   "jetty-webapp"
   "jetty-xml"
+  "apache-jsp"
+  "apache-jstl"
 )
 
 MVN=${MAVEN_BIN:-$(which mvn)}
