@@ -177,6 +177,7 @@ public class HttpParser
     private long _contentPosition;
     private int _chunkLength;
     private int _chunkPosition;
+    private boolean _chunkExtensionInQuotedString;
     private boolean _headResponse;
     private boolean _cr;
     private ByteBuffer _contentChunk;
@@ -1778,6 +1779,7 @@ public class HttpParser
                             break;
 
                         case SPACE:
+                            _chunkExtensionInQuotedString = false;
                             setState(State.CHUNK_PARAMS);
                             break;
 
@@ -1790,6 +1792,7 @@ public class HttpParser
                             }
                             else
                             {
+                                _chunkExtensionInQuotedString = false;
                                 setState(State.CHUNK_PARAMS);
                             }
                     }
@@ -1798,6 +1801,9 @@ public class HttpParser
 
                 case CHUNK_PARAMS:
                 {
+                    // parse chunk-ext according to RFC 9112 Section 7.1.1
+                    // chunk-ext-val = token / quoted-string
+                    // A CRLF inside a quoted-string is NOT a valid line terminator and must be treated as an error.
                     HttpTokens.Token t = next(buffer);
                     if (t == null)
                         break;
@@ -1805,6 +1811,10 @@ public class HttpParser
                     switch (t.getType())
                     {
                         case LF:
+                            if (_chunkExtensionInQuotedString)
+                                // CR/LF inside a quoted-string is a request-smuggling vector (CVE-2026-2332)
+                                throw new BadMessageException(HttpStatus.BAD_REQUEST_400, "Bad chunk extension: CRLF inside quoted-string");
+                            _chunkExtensionInQuotedString = false;
                             if (_chunkLength == 0)
                             {
                                 setState(State.TRAILER);
@@ -1815,7 +1825,10 @@ public class HttpParser
                                 setState(State.CHUNK);
                             break;
                         default:
-                            break; // TODO review
+                            // Track entry into / exit from a quoted-string value
+                            if (t.getChar() == '"')
+                                _chunkExtensionInQuotedString = !_chunkExtensionInQuotedString;
+                            break;
                     }
                     break;
                 }
@@ -1904,6 +1917,7 @@ public class HttpParser
         _headerBytes = 0;
         _host = false;
         _headerComplete = false;
+        _chunkExtensionInQuotedString = false;
     }
 
     protected void setState(State state)

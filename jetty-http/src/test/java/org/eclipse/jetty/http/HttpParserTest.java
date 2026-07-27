@@ -1271,6 +1271,74 @@ public class HttpParserTest
         assertTrue(_early);
     }
 
+    /**
+     * Regression test for CVE-2026-2332: HTTP Request Smuggling via Chunked Extension Quoted-String Parsing.
+     *
+     * Per RFC 9112 Section 7.1.1, a CRLF inside a chunk-ext quoted-string is NOT a valid line
+     * terminator and must be rejected as a bad request (400). Jetty previously terminated chunk
+     * extension parsing at the embedded CRLF, allowing a smuggled request to be injected.
+     *
+     * PoC payload:
+     *   POST / HTTP/1.1\r\n
+     *   Transfer-Encoding: chunked\r\n
+     *   \r\n
+     *   1;a="\r\n        <-- unclosed quoted string; embedded CRLF
+     *   X\r\n            <-- treated as chunk body by vulnerable parser
+     *   0\r\n
+     *   \r\n
+     *   GET /smuggled HTTP/1.1\r\n   <-- smuggled request
+     */
+    @Test
+    public void testChunkExtQuotedStringWithCRLFRejected()
+    {
+        // Attack: chunk extension with an UNCLOSED quoted string containing \r\n
+        // The vulnerable parser treated the embedded \r\n as end-of-chunk-header.
+        ByteBuffer buffer = BufferUtil.toBuffer(
+            "POST / HTTP/1.1\r\n" +
+                "Host: localhost\r\n" +
+                "Transfer-Encoding: chunked\r\n" +
+                "\r\n" +
+                "1;a=\"\r\n" +           // chunk-ext: unclosed quote + embedded CRLF
+                "X\r\n" +               // what vulnerable parser thought was chunk data
+                "0\r\n" +
+                "\r\n" +
+                "GET /smuggled HTTP/1.1\r\n" + // smuggled request
+                "Host: localhost\r\n" +
+                "\r\n");
+        HttpParser.RequestHandler handler = new Handler();
+        HttpParser parser = new HttpParser(handler);
+        parseAll(parser, buffer);
+
+        // After headers are complete, BadMessageException in content parsing routes to earlyEOF()
+        // (see HttpParser.badMessage(): if _headerComplete then earlyEOF else badMessage).
+        // The key invariant is that the smuggled request must NOT be processed.
+        assertTrue(_early, "Expected earlyEOF() to be called for CRLF inside chunk-ext quoted-string (CVE-2026-2332)");
+        assertFalse(_messageCompleted, "Smuggled request must not result in messageComplete()");
+        assertNull(_content, "No chunk data should have been consumed from inside the quoted-string extension");
+    }
+
+    @Test
+    public void testChunkExtValidQuotedStringParsedOk()
+    {
+        // A well-formed chunk extension with a properly closed quoted-string value must still work.
+        ByteBuffer buffer = BufferUtil.toBuffer(
+            "POST / HTTP/1.1\r\n" +
+                "Host: localhost\r\n" +
+                "Transfer-Encoding: chunked\r\n" +
+                "\r\n" +
+                "a;ext=\"hello world\"\r\n" + // valid: quoted-string, no embedded CRLF
+                "0123456789\r\n" +
+                "0\r\n" +
+                "\r\n");
+        HttpParser.RequestHandler handler = new Handler();
+        HttpParser parser = new HttpParser(handler);
+        parseAll(parser, buffer);
+
+        assertNull(_bad, "Expected valid chunk-ext with proper quoted-string to be accepted");
+        assertEquals("0123456789", _content);
+        assertTrue(_messageCompleted);
+    }
+
     @Test
     public void testMultiParse()
     {
