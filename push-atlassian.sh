@@ -102,13 +102,13 @@ if [ "$LOCAL_INSTALL" = true ]; then
   DEPLOY_CMD="install"
 else
   echo "Deploying artifacts to packages.atlassian.com 3dparty..."
-  echo "Target: https://packages.atlassian.com/maven/3dparty"
+  echo "Target: https://packages.atlassian.com/artifactory/maven-3rdparty-local"
   DEPLOY_CMD="deploy"
 fi
 echo "========================================="
 
-# Run a single Maven invocation across all modules with -am (also make dependencies).
-# This ensures inter-module dependencies are resolved from the reactor, not the remote repo.
+# Single reactor invocation with -am (also make dependencies) so inter-module dependencies
+# are resolved from the reactor rather than the remote repo.
 # -U forces update check so cached "not found" failures are cleared.
 "$MVN" $DEPLOY_CMD \
   -pl "$MODULE_LIST" \

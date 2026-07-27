@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.eclipse.jetty</groupId>
   <artifactId>jetty-project</artifactId>
-  <version>9.4.58.v20250814-atlassian-1-SNAPSHOT</version>
+  <version>9.4.58.v20250814-atlassian-3-SNAPSHOT</version>
   <name>Jetty :: Project</name>
   <description>The Eclipse Jetty Project</description>
   <packaging>pom</packaging>
@@ -249,8 +249,8 @@
                   <message>[ERROR] OLD JDK [${java.version}] in use. Jetty ${project.version} requires JDK 1.8.0 or newer</message>
                 </requireJavaVersion>
                 <versionOsgiRule implementation="org.eclipse.jetty.toolchain.enforcer.rules.RequireOsgiCompatibleVersionRule" />
-                <versionRedhatRule implementation="org.eclipse.jetty.toolchain.enforcer.rules.RequireRedhatCompatibleVersionRule" />
-                <versionDebianRule implementation="org.eclipse.jetty.toolchain.enforcer.rules.RequireDebianCompatibleVersionRule" />
+                <!-- versionRedhatRule and versionDebianRule removed: Atlassian patch versions use
+                     the '-atlassian-N' suffix which contains '-', rejected by those rules. -->
                 <requireUpperBoundDeps>
                   <excludes>
                     <exclude>javax.enterprise:cdi-api</exclude>
@@ -494,7 +494,10 @@
         <executions>
           <execution>
             <id>attach-version</id>
-            <phase>process-resources</phase>
+            <!-- Bound to 'none' to prevent VERSION.txt being attached as a Maven artifact.
+                 packages.atlassian.com/maven/3dparty rejects this non-standard attachment (HTTP 405).
+                 Original phase was: process-resources -->
+            <phase>none</phase>
             <goals>
               <goal>attach-version-text</goal>
             </goals>
@@ -1853,11 +1856,11 @@
   <distributionManagement>
     <repository>
       <id>atlassian-3rdparty</id>
-      <url>https://packages.atlassian.com/maven/3dparty</url>
+      <url>https://packages.atlassian.com/artifactory/maven-3rdparty-local</url>
     </repository>
     <snapshotRepository>
       <id>atlassian-3rdparty-snapshot</id>
-      <url>https://packages.atlassian.com/maven/3dparty-snapshot</url>
+      <url>https://packages.atlassian.com/artifactory/maven-3rdparty-snapshot-local</url>
     </snapshotRepository>
   </distributionManagement>
 
