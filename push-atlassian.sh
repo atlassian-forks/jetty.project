@@ -126,7 +126,7 @@ echo "========================================="
 if [ $EXIT_CODE -eq 0 ]; then
   echo "SUCCESS: All FeCru Jetty modules published."
   echo ""
-  echo "Published modules (version ${JETTY_VERSION}-atlassian-1-SNAPSHOT):"
+  echo "Published modules (version ${JETTY_VERSION}):"
   for module in "${FECRU_MODULES[@]}"; do
     echo "  org.eclipse.jetty:${module}"
   done
