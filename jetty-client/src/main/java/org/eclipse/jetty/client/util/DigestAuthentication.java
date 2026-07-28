@@ -177,8 +177,11 @@ public class DigestAuthentication extends AbstractAuthentication
             if (digester == null)
                 return;
 
+            // CVE-2026-10050: Use UTF-8 instead of ISO-8859-1 to avoid lossy encoding
+            // of passwords containing characters above U+00FF, which would silently
+            // collapse to '?' and allow authentication bypass via character substitution.
             String a1 = user + ":" + realm + ":" + password;
-            String hashA1 = toHexString(digester.digest(a1.getBytes(StandardCharsets.ISO_8859_1)));
+            String hashA1 = toHexString(digester.digest(a1.getBytes(StandardCharsets.UTF_8)));
 
             String query = request.getQuery();
             String path = request.getPath();
@@ -186,7 +189,7 @@ public class DigestAuthentication extends AbstractAuthentication
             String a2 = request.getMethod() + ":" + uri;
             if ("auth-int".equals(qop))
                 a2 += ":" + toHexString(digester.digest(content));
-            String hashA2 = toHexString(digester.digest(a2.getBytes(StandardCharsets.ISO_8859_1)));
+            String hashA2 = toHexString(digester.digest(a2.getBytes(StandardCharsets.UTF_8)));
 
             String nonceCount;
             String clientNonce;
@@ -203,7 +206,7 @@ public class DigestAuthentication extends AbstractAuthentication
                 clientNonce = null;
                 a3 = hashA1 + ":" + nonce + ":" + hashA2;
             }
-            String hashA3 = toHexString(digester.digest(a3.getBytes(StandardCharsets.ISO_8859_1)));
+            String hashA3 = toHexString(digester.digest(a3.getBytes(StandardCharsets.UTF_8)));
 
             StringBuilder value = new StringBuilder("Digest");
             value.append(" username=\"").append(user).append("\"");
