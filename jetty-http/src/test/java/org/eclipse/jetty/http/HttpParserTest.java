@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 
 import org.eclipse.jetty.http.HttpParser.State;
 import org.eclipse.jetty.toolchain.test.Net;
@@ -34,6 +35,8 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.eclipse.jetty.http.HttpComplianceSection.NO_FIELD_FOLDING;
@@ -1050,6 +1053,93 @@ public class HttpParserTest
 
         assertTrue(_headerCompleted);
         assertTrue(_messageCompleted);
+    }
+
+    public static Stream<Arguments> chunkLineTermination()
+    {
+        List<Arguments> cases = new ArrayList<>();
+        String[] bodies = {
+            "1;!\nX\r\n0\r\n\r\n",
+            "1;ext=value\nX\r\n0\r\n\r\n",
+            "1;ext=\"value\"\nX\r\n0\r\n\r\n",
+            "1;ext=\"value\nX\r\n0\r\n\r\n",
+            "1 \nX\r\n0\r\n\r\n",
+            "1\nX\r\n0\r\n\r\n",
+            "1\r\nX\n0\r\n\r\n",
+            "1\r\nX\r\n0\n\r\n",
+            "1\r\nX\r\n0;!\n\r\n",
+            "1\r\nX\r\n0\r\n\n",
+            "1\r\nX\r\n0\r\nTrailer: value\n\r\n",
+            "1\r\nX\r\n0\r\nContent-Type: text/plain\n\r\n",
+            "1\r\nX\r\n0\r\nTrailer:\n\r\n",
+            "\n1\r\nX\r\n0\r\n\r\n"
+        };
+        for (HttpCompliance compliance : HttpCompliance.values())
+        {
+            for (boolean response : new boolean[]{false, true})
+            {
+                for (int fragmentSize : new int[]{1, Integer.MAX_VALUE})
+                {
+                    for (String body : bodies)
+                        cases.add(Arguments.of(body, compliance, response, fragmentSize));
+                }
+            }
+        }
+        return cases.stream();
+    }
+
+    @ParameterizedTest
+    @MethodSource("chunkLineTermination")
+    public void testChunkLineTermination(String body, HttpCompliance compliance, boolean response, int fragmentSize)
+    {
+        // Each malformed chunk terminator must fail, while its CRLF equivalent remains valid.
+        for (boolean valid : new boolean[]{true, false})
+        {
+            init();
+            String content = valid ? body.replace("\r\n", "\n").replace("\n", "\r\n") : body;
+            // An unclosed quoted string remains invalid even with CRLF (CVE-2026-2332).
+            boolean accepted = valid && !body.contains("ext=\"value\n");
+            String start = response ? "HTTP/1.1 200 OK" : "POST / HTTP/1.1";
+            ByteBuffer buffer = BufferUtil.toBuffer(start + "\r\n" +
+                "Host: localhost\r\n" +
+                "Transfer-Encoding: chunked\r\n\r\n" + content);
+            Handler handler = new Handler();
+            HttpParser parser = response
+                ? new HttpParser((HttpParser.ResponseHandler)handler, -1, compliance)
+                : new HttpParser((HttpParser.RequestHandler)handler, -1, compliance);
+            while (buffer.hasRemaining() && !parser.isTerminated())
+            {
+                ByteBuffer fragment = buffer.slice();
+                fragment.limit(Math.min(fragment.remaining(), fragmentSize));
+                while (fragment.hasRemaining() && !parser.isTerminated())
+                    parser.parseNext(fragment);
+                buffer.position(buffer.position() + fragment.position());
+            }
+
+            assertEquals(accepted, _messageCompleted);
+            assertEquals(!accepted, _early);
+            assertEquals(!accepted, parser.isTerminated());
+            assertNull(_bad);
+            if (accepted)
+                assertEquals("X", _content);
+        }
+    }
+
+    @Test
+    public void testChunkContentWithLineFeeds()
+    {
+        ByteBuffer buffer = BufferUtil.toBuffer("POST / HTTP/1.1\n" +
+            "Host: localhost\n" +
+            "Transfer-Encoding: chunked\n\n" +
+            "4\r\nA\nB\r\r\n0\r\n\r\n");
+        HttpParser.RequestHandler handler = new Handler();
+        HttpParser parser = new HttpParser(handler);
+        parseAll(parser, buffer);
+
+        assertTrue(_messageCompleted);
+        assertFalse(_early);
+        assertNull(_bad);
+        assertEquals("A\nB\r", _content);
     }
 
     @Test

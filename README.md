@@ -46,3 +46,10 @@ Professional Services
 ---------------------
 
 Expert advice and production support are available through [Webtide.com](https://webtide.com).
+
+**Release notes**
+
+**jetty-9.4.58.v20250814-atlassian-4**
+Fix for CVE-2026-19203
+**jetty-9.4.58.v20250814-atlassian-3**
+-Fix for CVE-2026-2332, CVE-2026-10050

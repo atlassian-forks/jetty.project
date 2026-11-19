@@ -460,6 +460,10 @@ public class HttpParser
                 throw new IllegalCharacterException(_state, t, buffer);
 
             case LF:
+                // Chunk framing requires CRLF, including extensions and trailers.
+                if (!_cr && (_state == State.CHUNKED_CONTENT || _state == State.CHUNK_SIZE ||
+                    _state == State.CHUNK_PARAMS || _state == State.TRAILER))
+                    throw new BadMessageException("Bad EOL");
                 _cr = false;
                 break;
 
