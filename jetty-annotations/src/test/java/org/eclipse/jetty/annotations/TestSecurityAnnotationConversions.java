@@ -37,6 +37,7 @@ import org.eclipse.jetty.webapp.WebAppContext;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -120,6 +121,61 @@ public class TestSecurityAnnotationConversions
         introspector.introspect(DenyServlet.class);
 
         compareResults(expectedMappings, ((ConstraintAware)wac.getSecurityHandler()).getConstraintMappings());
+    }
+
+    @Test
+    public void testDescriptorConstraintOverridesOnlyMatchingPath() throws Exception
+    {
+        WebAppContext wac = makeWebAppContext(DenyServlet.class.getCanonicalName(), "denyServlet", new String[]{
+            "/descriptor"
+        });
+        ServletMapping annotationServletMapping = new ServletMapping();
+        annotationServletMapping.setServletName("denyServlet");
+        annotationServletMapping.setPathSpecs(new String[]{"/annotation-only"});
+        wac.getServletHandler().setServletMappings(new ServletMapping[]{
+            wac.getServletHandler().getServletMappings()[0], annotationServletMapping
+        });
+        Constraint descriptorConstraint = new Constraint();
+        descriptorConstraint.setAuthenticate(false);
+        ConstraintMapping descriptorMapping = new ConstraintMapping();
+        descriptorMapping.setPathSpec("/descriptor");
+        descriptorMapping.setConstraint(descriptorConstraint);
+        ((ConstraintAware)wac.getSecurityHandler()).addConstraintMapping(descriptorMapping);
+
+        new ServletSecurityAnnotationHandler(wac).doHandle(DenyServlet.class);
+
+        Constraint annotationConstraint = new Constraint();
+        annotationConstraint.setAuthenticate(true);
+        annotationConstraint.setDataConstraint(Constraint.DC_NONE);
+        ConstraintMapping annotationMapping = new ConstraintMapping();
+        annotationMapping.setPathSpec("/annotation-only");
+        annotationMapping.setConstraint(annotationConstraint);
+        compareResults(new ConstraintMapping[]{descriptorMapping, annotationMapping},
+            ((ConstraintAware)wac.getSecurityHandler()).getConstraintMappings());
+    }
+
+    @Test
+    public void testDescriptorConstraintsOverrideAllMatchingPaths() throws Exception
+    {
+        WebAppContext wac = makeWebAppContext(DenyServlet.class.getCanonicalName(), "denyServlet", new String[]{
+            "/first", "/second"
+        });
+        Constraint descriptorConstraint = new Constraint();
+        descriptorConstraint.setAuthenticate(false);
+        ConstraintAware securityHandler = (ConstraintAware)wac.getSecurityHandler();
+        for (String path : new String[]{"/first", "/second"})
+        {
+            ConstraintMapping mapping = new ConstraintMapping();
+            mapping.setPathSpec(path);
+            mapping.setConstraint(descriptorConstraint);
+            securityHandler.addConstraintMapping(mapping);
+        }
+
+        new ServletSecurityAnnotationHandler(wac).doHandle(DenyServlet.class);
+
+        assertEquals(2, securityHandler.getConstraintMappings().size());
+        for (ConstraintMapping mapping : securityHandler.getConstraintMappings())
+            assertFalse(mapping.getConstraint().getAuthenticate());
     }
 
     @Test

@@ -81,26 +81,21 @@ public class ServletSecurityAnnotationHandler extends AbstractIntrospectableAnno
         if (servletSecurity == null)
             return;
 
-        //If there are already constraints defined (ie from web.xml) that match any
-        //of the url patterns defined for this servlet, then skip the security annotation.
-
         List<ServletMapping> servletMappings = getServletMappings(clazz.getCanonicalName());
-        List<ConstraintMapping> constraintMappings = ((ConstraintAware)_context.getSecurityHandler()).getConstraintMappings();
-
-        if (constraintsExist(servletMappings, constraintMappings))
-        {
-            LOG.warn("Constraints already defined for " + clazz.getName() + ", skipping ServletSecurity annotation");
-            return;
-        }
+        List<ConstraintMapping> existingMappings = ((ConstraintAware)_context.getSecurityHandler()).getConstraintMappings();
 
         //Make a fresh list
-        constraintMappings = new ArrayList<ConstraintMapping>();
+        List<ConstraintMapping> constraintMappings = new ArrayList<ConstraintMapping>();
 
         ServletSecurityElement securityElement = new ServletSecurityElement(servletSecurity);
         for (ServletMapping sm : servletMappings)
         {
             for (String url : sm.getPathSpecs())
             {
+                // A descriptor or programmatic constraint takes precedence only for its own URL pattern.
+                if (constraintExists(url, existingMappings))
+                    continue;
+
                 _context.getMetaData().setOrigin("constraint.url." + url, servletSecurity, clazz);
                 constraintMappings.addAll(ConstraintSecurityHandler.createConstraintsWithMappingsForPath(clazz.getName(), url, securityElement));
             }
@@ -154,42 +149,45 @@ public class ServletSecurityAnnotationHandler extends AbstractIntrospectableAnno
     }
 
     /**
-     * Check if there are already <code>&lt;security-constraint&gt;</code> elements defined that match the url-patterns for
-     * the servlet.
+     * Check whether a constraint already exists for this URL pattern.
      *
-     * @param servletMappings the servlet mappings
+     * @param pathSpec the servlet URL pattern
      * @param constraintMappings the constraint mappings
      * @return true if constraint exists
      */
+    protected boolean constraintExists(String pathSpec, List<ConstraintMapping> constraintMappings)
+    {
+        if (constraintMappings != null)
+        {
+            for (ConstraintMapping mapping : constraintMappings)
+            {
+                if (pathSpec.equals(mapping.getPathSpec()))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Retained for subclasses that check whether any servlet mapping has a constraint.
+     *
+     * @param servletMappings the servlet mappings
+     * @param constraintMappings the constraint mappings
+     * @return true if any servlet URL pattern has a constraint
+     */
     protected boolean constraintsExist(List<ServletMapping> servletMappings, List<ConstraintMapping> constraintMappings)
     {
-        boolean exists = false;
-
-        //Check to see if the path spec on each constraint mapping matches a pathSpec in the servlet mappings.
-        //If it does, then we should ignore the security annotations.
         for (ServletMapping mapping : servletMappings)
         {
-            //Get its url mappings
             String[] pathSpecs = mapping.getPathSpecs();
             if (pathSpecs == null)
                 continue;
-
-            //Check through the constraints to see if there are any whose pathSpecs (url mappings)
-            //match the servlet. If so, then we already have constraints defined for this servlet,
-            //and we will not be processing the annotation (ie web.xml or programmatic override).
-            for (int i = 0; constraintMappings != null && i < constraintMappings.size() && !exists; i++)
+            for (String pathSpec : pathSpecs)
             {
-                for (int j = 0; j < pathSpecs.length; j++)
-                {
-                    //TODO decide if we need to check the origin
-                    if (pathSpecs[j].equals(constraintMappings.get(i).getPathSpec()))
-                    {
-                        exists = true;
-                        break;
-                    }
-                }
+                if (constraintExists(pathSpec, constraintMappings))
+                    return true;
             }
         }
-        return exists;
+        return false;
     }
 }
