@@ -49,6 +49,8 @@ Expert advice and production support are available through [Webtide.com](https:/
 
 **Release notes**
 
+**jetty-9.4.58.v20250814-atlassian-5**
+Fix for CVE-2026-18661
 **jetty-9.4.58.v20250814-atlassian-4**
 Fix for CVE-2026-19203
 **jetty-9.4.58.v20250814-atlassian-3**
