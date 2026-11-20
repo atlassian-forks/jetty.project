@@ -1,3 +1,6 @@
+9.4.58.v20250814-atlassian-5 - 20 November 2026
+ + BDEV-21690 Backport CVE-2026-18661: apply ServletSecurity annotations to unconstrained servlet mappings
+
 9.4.58.v20250814-atlassian-4 - 20 November 2026
  + BDEV-21690 Backport CVE-2026-19203: require CRLF in chunk framing
 
