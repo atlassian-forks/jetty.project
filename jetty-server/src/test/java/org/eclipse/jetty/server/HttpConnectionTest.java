@@ -65,6 +65,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -74,6 +75,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class HttpConnectionTest
@@ -230,6 +232,30 @@ public class HttpConnectionTest
         assertThat(response, containsString(" 200 OK"));
         assertThat(response, containsString("Connection: close"));
         assertThat(response, containsString("Early EOF"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testChunkExtensionLineTermination(boolean valid) throws Exception
+    {
+        String request = "POST /?id=first HTTP/1.1\r\n" +
+            "Host: localhost\r\n" +
+            "Transfer-Encoding: chunked\r\n\r\n" +
+            "1;!" + (valid ? "\r\n" : "\n") +
+            "X\r\n0\r\n\r\n" +
+            "GET /?id=second HTTP/1.1\r\n" +
+            "Host: localhost\r\n" +
+            "Connection: close\r\n\r\n";
+
+        LocalEndPoint endPoint = connector.executeRequest(request);
+        endPoint.waitUntilClosed();
+        assertFalse(endPoint.isOpen());
+        String responses = BufferUtil.toString(endPoint.takeOutput());
+        assertThat(responses, containsString("HTTP/1.1"));
+        assertEquals(valid, responses.contains("id=second"));
+        assertEquals(valid ? 2 : 1, responses.split("HTTP/1.1 ").length - 1);
+        if (!valid)
+            assertThat(responses, containsString("Early EOF"));
     }
 
     /**
