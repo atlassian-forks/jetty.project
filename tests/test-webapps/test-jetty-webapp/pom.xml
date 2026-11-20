@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.eclipse.jetty.tests</groupId>
     <artifactId>test-webapps-parent</artifactId>
-    <version>9.4.58.v20250814-atlassian-4-SNAPSHOT</version>
+    <version>9.4.58.v20250814-atlassian-4</version>
   </parent>
   <artifactId>test-jetty-webapp</artifactId>
   <name>Test :: Jetty Test Webapp</name>

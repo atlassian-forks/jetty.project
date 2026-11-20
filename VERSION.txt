@@ -1,3 +1,6 @@
+9.4.58.v20250814-atlassian-4 - 20 November 2026
+ + BDEV-21690 Backport CVE-2026-19203: require CRLF in chunk framing
+
 9.4.58.v20250814 - 14 August 2025
  + 461 Move ServletTester to the test source directory
  + 13261 Improve handling of failed HTTP/2 requests
